@@ -193,23 +193,18 @@
         // --- Application State and Constants ---
         let model, webcam, loopId, videoDevices = [], currentDeviceIndex = 0, currentShapeName;
         
-        // IMPORTANT FOR GITHUB PAGES:
-        // This path is relative. It assumes you have a folder named "model"
-        // in the same directory as this HTML file.
-        // Your repository structure should look like this:
-        // /
-        // |-- index.html  (this file)
-        // |-- model/
-        // |   |-- model.json
-        // |   |-- metadata.json
-        // |   |-- weights.bin
-        const MODEL_DIR = "./model/";
+        // --- FIX FOR GITHUB PAGES ---
+        // This dynamically creates the correct path to the model folder.
+        // It checks if the page is running on github.io and adds the repository name to the path.
+        const repoName = 'ArSmartGeoEpua'; // <-- Make sure this matches your repository name EXACTLY.
+        const isGitHubPages = window.location.hostname.includes('github.io');
+        const MODEL_DIR = isGitHubPages ? `/${repoName}/model/` : './model/';
+        // --- END OF FIX ---
 
         // --- Shape Data and Formulas ---
         const shapeData = {
             Rectangle: {
                 name: 'สี่เหลี่ยม',
-                // FIX: Using a 3D box icon as users will likely scan a box-like object.
                 icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-full h-full"><path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" /></svg>`,
                 formulas: {
                     area: { name: 'พื้นที่', formula: 'A = w × l', vars: { w: 'ความกว้าง', l: 'ความยาว' }, calc: (v) => v.w * v.l, unit: 'ตร.หน่วย'},
@@ -218,7 +213,6 @@
             },
             Cylinder: {
                 name: 'ทรงกระบอก',
-                // FIX: Simplified cylinder icon for a cleaner look.
                 icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-full h-full">
                            <ellipse cx="12" cy="7" rx="9" ry="3" />
                            <path d="M3 7v10" />
@@ -232,7 +226,6 @@
             },
             Sphere: {
                 name: 'ทรงกลม',
-                // FIX: Simplified sphere icon.
                 icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-full h-full">
                            <circle cx="12" cy="12" r="9" />
                            <ellipse cx="12" cy="12" rx="9" ry="4" stroke-dasharray="4 2" />
@@ -266,14 +259,12 @@
             webcamContainer.innerHTML = '';
             webcamContainer.appendChild(webcam.canvas);
             
-            // The library handles flipping the canvas view, so no extra CSS transform is needed.
             if (loopId) window.cancelAnimationFrame(loopId);
             loopId = window.requestAnimationFrame(loop);
         }
 
         /** Finds available cameras and initializes the first one */
         async function initializeCamera() {
-            // This is a common trick to trigger the permission prompt
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
             stream.getTracks().forEach(track => track.stop());
 
@@ -282,7 +273,6 @@
                 .map(d => ({
                     deviceId: d.deviceId,
                     label: d.label,
-                    // Heuristic to determine camera facing mode from its label
                     facingMode: d.label.toLowerCase().includes('front') ? 'user' : 'environment'
                 }));
 
@@ -296,7 +286,6 @@
                 cameraSelect.appendChild(option);
             });
             
-            // Prefer the rear camera ('environment') by default
             const rearCamera = videoDevices.find(d => d.facingMode === 'environment');
             currentDeviceIndex = rearCamera ? videoDevices.indexOf(rearCamera) : 0;
             cameraSelect.value = videoDevices[currentDeviceIndex].deviceId;
@@ -354,7 +343,6 @@
             scanButton.disabled = false;
             scanButton.innerText = 'วิเคราะห์รูปภาพ';
             try {
-                // Re-initialize the camera to ensure it restarts correctly
                 await setupWebcam(cameraSelect.value);
             } catch (error) {
                 console.error("Failed to restart webcam:", error);
@@ -390,13 +378,14 @@
         /** Loads the Teachable Machine model */
         async function preloadModel() {
             try {
+                // Now uses the dynamically generated MODEL_DIR
                 model = await tmImage.load(MODEL_DIR + "model.json", MODEL_DIR + "metadata.json");
                 startButton.disabled = false;
                 startButton.innerText = '🚀 เริ่มต้นใช้งาน';
             } catch(e) {
                 startButton.innerText = '❌ โหลดโมเดลล้มเหลว';
-                console.error(e);
-                alert("ไม่สามารถโหลดไฟล์โมเดลได้ กรุณาตรวจสอบว่าโฟลเดอร์ 'model' อยู่ในตำแหน่งที่ถูกต้องและลองรีเฟรชหน้าเว็บ");
+                console.error("Model loading failed. Attempted path:", MODEL_DIR, "Error:", e);
+                alert(`ไม่สามารถโหลดไฟล์โมเดลได้จาก: ${MODEL_DIR}\nกรุณาตรวจสอบว่าชื่อ Repository ถูกต้องและโฟลเดอร์ 'model' อยู่ในตำแหน่งที่ถูกต้อง`);
             }
         }
 
@@ -512,7 +501,6 @@
         function calculateAndShowARResult() {
             const formulaData = shapeData[arState.shapeName].formulas[arState.formulaKey];
             const arValuesInCm = {};
-            // Convert values from meters (Three.js default) to cm for calculation
             Object.entries(arState.values).forEach(([k, v]) => arValuesInCm[k] = v * 100); 
             
             const result = formulaData.calc(arValuesInCm);
@@ -562,7 +550,6 @@
             states.ar.classList.add('hidden');
             arUi.classList.add('hidden');
             
-            // Only go back to the result screen if not falling back to manual input
             if (!isFallback) {
                 showState('result');
             }
