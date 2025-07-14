@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>AR Smart Geometry Equation</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=IBM+Plex+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'IBM Plex Sans Thai', 'Inter', sans-serif;
+            background-color: #111827;
+            color: #e5e7eb;
+        }
+        .glass-card {
+            background: rgba(31, 41, 55, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .spinner {
+            border-color: rgba(255, 255, 255, 0.2);
+            border-top-color: #3b82f6;
+        }
+        #webcam-container canvas {
+            width: 100%;
+            height: 100%;
+        }
+        #ar-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;
+        }
+        #ar-ui { z-index: 20; }
+        #ar-button {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 999;
+            padding: 12px 24px; border-radius: 9999px; border: none; font-size: 1.125rem;
+            font-weight: bold; cursor: pointer; transition: background-color 0.2s, transform 0.2s;
+        }
+        #ar-button:not([disabled]) { background-color: #2563eb; color: white; }
+        #ar-button:not([disabled]):hover { background-color: #1d4ed8; }
+        #ar-button[disabled] { background-color: #ef4444; color: white; cursor: not-allowed; }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div id="app-container" class="w-full max-w-md mx-auto">
+
+        <div id="start-state" class="text-center">
+            <h1 class="text-3xl font-bold mb-2">AR Smart Geometry Equation</h1>
+            <p class="text-gray-400 mb-6">วิเคราะห์รูปทรงเรขาคณิตและแสดงสูตรจากกล้องของคุณ</p>
+            <button id="start-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full transition-transform transform hover:scale-105 w-full text-lg">
+                 เริ่มต้นใช้งาน
+            </button>
+        </div>
+
+        <div id="loading-state" class="hidden text-center">
+            <div class="spinner w-12 h-12 rounded-full border-4 animate-spin mx-auto mb-4"></div>
+            <p id="loading-text" class="text-gray-400">กำลังโหลดโมเดล...</p>
+        </div>
+
+        <div id="scanning-state" class="hidden w-full">
+            <div id="webcam-container" class="w-full aspect-square rounded-2xl overflow-hidden bg-gray-900 border-2 border-gray-700 mb-4 flex items-center justify-center"></div>
+            <div class="flex items-center space-x-2 mb-4">
+                <select id="camera-select" class="glass-card w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+                <button id="switch-camera-button" title="สลับกล้อง" class="glass-card p-2 rounded-lg hover:bg-gray-700 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 20l16-16"></path></svg>
+                </button>
+            </div>
+            <p id="scan-info-text" class="text-center text-gray-400 mb-4 min-h-[1.25rem]"></p>
+            <button id="scan-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full w-full text-lg disabled:bg-gray-500 disabled:cursor-not-allowed">
+                วิเคราะห์รูปภาพ
+            </button>
+        </div>
+
+        <div id="result-state" class="hidden w-full glass-card rounded-2xl p-6 text-center">
+            <div id="result-icon" class="w-16 h-16 mx-auto mb-4 text-blue-400"></div>
+            <h2 id="result-name" class="text-2xl font-bold mb-4"></h2>
+            <p class="text-gray-300 mb-6">คุณต้องการทำอะไรต่อ?</p>
+            <div class="space-y-4">
+                <button id="ar-choice-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full w-full text-lg">วัดระยะด้วย AR</button>
+                <button id="manual-choice-button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-full w-full text-lg">กรอกค่าเอง</button>
+            </div>
+            <button id="scan-again-button" class="mt-8 text-gray-400 hover:text-white transition">สแกนอีกครั้ง</button>
+        </div>
+
+        <div id="formula-selection-state" class="hidden w-full glass-card rounded-2xl p-6 text-center">
+            <h2 id="formula-selection-title" class="text-2xl font-bold mb-4"></h2>
+            <p class="text-gray-300 mb-6">กรุณาเลือกสูตรที่ต้องการคำนวณ</p>
+            <div id="formula-buttons-container" class="space-y-3 text-left"></div>
+            <button id="formula-back-button" class="mt-6 bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-full w-full">ย้อนกลับ</button>
+        </div>
+
+        <div id="manual-input-state" class="hidden w-full glass-card rounded-2xl p-6 text-center">
+            <h2 id="manual-input-title" class="text-2xl font-bold mb-4"></h2>
+            <div id="manual-input-fields" class="space-y-4"></div>
+            <div id="manual-result-display" class="mt-6 text-2xl font-bold text-green-400 min-h-[2rem]"></div>
+            <div class="flex space-x-2 mt-6">
+                <button id="manual-back-button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-full transition w-1/2">ย้อนกลับ</button>
+                <button id="manual-calc-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full transition w-1/2">คำนวณ</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="ar-container" class="hidden">
+        <div id="ar-ui" class="absolute top-0 left-0 p-4 w-full flex flex-col items-center hidden">
+            <div class="glass-card p-4 rounded-lg text-center w-full max-w-sm">
+                <p id="ar-instruction-text" class="text-lg font-semibold"></p>
+                <p id="ar-values-text" class="text-sm text-gray-300 min-h-[1.25rem]"></p>
+            </div>
+        </div>
+        <button id="ar-back-button" class="absolute bottom-[80px] left-1/2 -translate-x-1/2 bg-red-600 hover:bg-red-700 text-white font-bold p-3 rounded-full z-30">
+            ยกเลิก
+        </button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+        const states = {
+            start: document.getElementById('start-state'),
+            loading: document.getElementById('loading-state'),
+            scanning: document.getElementById('scanning-state'),
+            result: document.getElementById('result-state'),
+            formulaSelection: document.getElementById('formula-selection-state'),
+            manualInput: document.getElementById('manual-input-state'),
+            ar: document.getElementById('ar-container'),
+        };
+        const loadingText = document.getElementById('loading-text');
+        const startButton = document.getElementById('start-button');
+        const webcamContainer = document.getElementById('webcam-container');
+        const cameraSelect = document.getElementById('camera-select');
+        const switchCameraButton = document.getElementById('switch-camera-button');
+        const scanButton = document.getElementById('scan-button');
+        const scanInfoText = document.getElementById('scan-info-text');
+        const resultIcon = document.getElementById('result-icon');
+        const resultName = document.getElementById('result-name');
+        const formulaButtonsContainer = document.getElementById('formula-buttons-container');
+        const scanAgainButton = document.getElementById('scan-again-button');
+        const arChoiceButton = document.getElementById('ar-choice-button');
+        const manualChoiceButton = document.getElementById('manual-choice-button');
+        const formulaSelectionTitle = document.getElementById('formula-selection-title');
+        const formulaBackButton = document.getElementById('formula-back-button');
+        const arUi = document.getElementById('ar-ui');
+        const arInstructionText = document.getElementById('ar-instruction-text');
+        const arValuesText = document.getElementById('ar-values-text');
+        const arBackButton = document.getElementById('ar-back-button');
+        const manualInputTitle = document.getElementById('manual-input-title');
+        const manualInputFields = document.getElementById('manual-input-fields');
+        const manualResultDisplay = document.getElementById('manual-result-display');
+        const manualBackButton = document.getElementById('manual-back-button');
+        const manualCalcButton = document.getElementById('manual-calc-button');
+
+        let model, webcam, loopId, videoDevices = [], currentDeviceIndex = 0, currentShapeName;
+        const MODEL_DIR = "./model/";
+
+        const shapeData = {
+            Rectangle: {
+                name: 'สี่เหลี่ยมผืนผ้า',
+                icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-full h-full"><path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" /></svg>`,
+                formulas: {
+                    area: { name: 'พื้นที่', formula: 'A = w × l', vars: { w: 'ความกว้าง', l: 'ความยาว' }, calc: (v) => v.w * v.l, unit: 'ตร.หน่วย'},
+                    perimeter: { name: 'เส้นรอบรูป', formula: 'P = 2(w + l)', vars: { w: 'ความกว้าง', l: 'ความยาว' }, calc: (v) => 2 * (v.w + v.l), unit: 'หน่วย' }
+                }
+            },
+            Cylinder: {
+                name: 'ทรงกระบอก',
+                icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-full h-full"><path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5v5.25a7.5 7.5 0 01-15 0V7.5m15 0a7.5 7.5 0 00-15 0M3 12.75V7.5m1.5 5.25c0 .39.146.76.401 1.06M19.5 12.75c0 .39-.146.76-.401 1.06" /></svg>`,
+                formulas: {
+                    volume: { name: 'ปริมาตร', formula: 'V = πr²h', vars: { r: 'รัศมี', h: 'ความสูง' }, calc: (v) => Math.PI * v.r * v.r * v.h, unit: 'ลบ.หน่วย' },
+                    surfaceArea: { name: 'พื้นที่ผิวทั้งหมด', formula: 'A = 2πrh + 2πr²', vars: { r: 'รัศมี', h: 'ความสูง' }, calc: (v) => (2 * Math.PI * v.r * v.h + 2 * Math.PI * v.r * v.r), unit: 'ตร.หน่วย' }
+                }
+            },
+            Sphere: {
+                name: 'ทรงกลม',
+                icon: `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-full h-full"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z" /><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 3a9 9 0 100 18" /></svg>`,
+                formulas: {
+                    volume: { name: 'ปริมาตร', formula: 'V = (4/3)πr³', vars: { r: 'รัศมี' }, calc: (v) => (4/3) * Math.PI * Math.pow(v.r, 3), unit: 'ลบ.หน่วย' },
+                    surfaceArea: { name: 'พื้นที่ผิว', formula: 'A = 4πr²', vars: { r: 'รัศมี' }, calc: (v) => 4 * Math.PI * v.r * v.r, unit: 'ตร.หน่วย' }
+                }
+            }
+        };
+
+        function showState(stateKey) {
+            Object.values(states).forEach(el => el.classList.add('hidden'));
+            if (states[stateKey]) states[stateKey].classList.remove('hidden');
+        }
+
+        async function setupWebcam(deviceId) {
+            if (webcam) await webcam.stop();
+            const device = videoDevices.find(d => d.deviceId === deviceId);
+            const flip = device?.facingMode === 'user';
+            
+            webcam = new tmImage.Webcam(350, 350, flip);
+            await webcam.setup({ deviceId: deviceId });
+            await webcam.play();
+            
+            webcamContainer.innerHTML = '';
+            webcamContainer.appendChild(webcam.canvas);
+            
+            if (webcam.canvas) {
+                webcam.canvas.style.transform = flip ? 'scaleX(-1)' : 'none';
+            }
+
+            if (loopId) window.cancelAnimationFrame(loopId);
+            loopId = window.requestAnimationFrame(loop);
+        }
+
+        async function initializeCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                stream.getTracks().forEach(track => track.stop());
+
+                videoDevices = (await navigator.mediaDevices.enumerateDevices())
+                    .filter(d => d.kind === 'videoinput')
+                    .map(d => {
+                        const facingMode = d.label.toLowerCase().includes('front') ? 'user' : 'environment';
+                        return { deviceId: d.deviceId, label: d.label, facingMode: facingMode };
+                    });
+
+                if (videoDevices.length === 0) throw new Error("ไม่พบกล้อง");
+                
+                cameraSelect.innerHTML = '';
+                videoDevices.forEach(d => {
+                    const option = document.createElement('option');
+                    option.value = d.deviceId;
+                    option.innerText = d.label || `Camera ${cameraSelect.length + 1}`;
+                    cameraSelect.appendChild(option);
+                });
+                
+                const rearCamera = videoDevices.find(d => d.facingMode === 'environment');
+                currentDeviceIndex = rearCamera ? videoDevices.indexOf(rearCamera) : 0;
+                cameraSelect.value = videoDevices[currentDeviceIndex].deviceId;
+                
+                await setupWebcam(cameraSelect.value);
+
+            } catch (err) {
+                console.error("Camera init failed:", err);
+                throw err;
+            }
+        }
+
+        function loop() {
+            if (webcam?.canvas) { 
+                webcam.update();
+                loopId = window.requestAnimationFrame(loop);
+            }
+        }
+
+        async function predict() {
+            if (!model || !webcam?.canvas) return;
+            scanButton.disabled = true;
+            scanButton.innerText = 'กำลังวิเคราะห์...';
+            const predictions = await model.predict(webcam.canvas);
+            const bestMatch = predictions.reduce((max, p) => p.probability > max.probability ? p : max);
+            if (bestMatch.probability > 0.95 && shapeData[bestMatch.className]) {
+                window.cancelAnimationFrame(loopId);
+                webcam.stop();
+                displayResult(bestMatch.className);
+            } else {
+                scanInfoText.innerText = "ไม่พบรูปทรงที่ชัดเจน ลองอีกครั้ง";
+                scanButton.disabled = false;
+                scanButton.innerText = 'วิเคราะห์รูปภาพ';
+            }
+        }
+
+        function displayResult(shapeName) {
+            currentShapeName = shapeName;
+            const data = shapeData[shapeName];
+            if (!data) return;
+            resultIcon.innerHTML = data.icon;
+            resultName.innerText = data.name;
+            showState('result');
+        }
+        
+        async function resetApp() {
+            showState('scanning');
+            scanInfoText.innerText = "";
+            scanButton.disabled = false;
+            scanButton.innerText = 'วิเคราะห์รูปภาพ';
+            try {
+                if (webcam) {
+                    await webcam.play();
+                    if (loopId) window.cancelAnimationFrame(loopId);
+                    loopId = window.requestAnimationFrame(loop);
+                }
+            } catch (error) {
+                console.error("Failed to restart webcam:", error);
+                showState('start');
+            }
+        }
+
+        function showFormulaSelection(mode) {
+            const data = shapeData[currentShapeName];
+            formulaSelectionTitle.innerText = `เลือกสูตรสำหรับ ${data.name}`;
+            formulaButtonsContainer.innerHTML = '';
+            for (const key in data.formulas) {
+                const item = data.formulas[key];
+                const button = document.createElement('button');
+                button.className = 'glass-card p-4 rounded-lg w-full text-left hover:bg-gray-700 transition';
+                button.innerHTML = `<p class="font-semibold text-blue-300">${item.name}</p>
+                                    <p class="text-gray-200 text-lg">${item.formula}</p>`;
+                button.onclick = () => {
+                    if (mode === 'ar') {
+                        startARMeasurement(currentShapeName, key);
+                    } else {
+                        showManualInput(currentShapeName, key);
+                    }
+                };
+                formulaButtonsContainer.appendChild(button);
+            }
+            formulaBackButton.onclick = () => showState('result');
+            showState('formulaSelection');
+        }
+
+        async function preloadModel() {
+            try {
+                model = await tmImage.load(MODEL_DIR + "model.json", MODEL_DIR + "metadata.json");
+                startButton.disabled = false;
+                startButton.innerText = '🚀 เริ่มต้นใช้งาน';
+            } catch(e) {
+                startButton.innerText = 'ไม่สามารถโหลดโมเดลได้';
+                console.error(e);
+            }
+        }
+
+        startButton.addEventListener('click', async () => {
+            showState('loading');
+            loadingText.innerText = "กำลังเตรียมกล้อง...";
+            try {
+                await initializeCamera();
+                showState('scanning');
+            } catch (error) {
+                showState('start');
+                alert(`Initialization failed: ${error.message}`);
+            }
+        });
+
+        switchCameraButton.addEventListener('click', () => {
+            if (videoDevices.length > 1) {
+                currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+                const newDeviceId = videoDevices[currentDeviceIndex].deviceId;
+                cameraSelect.value = newDeviceId;
+                setupWebcam(newDeviceId);
+            }
+        });
+        
+        cameraSelect.addEventListener('change', () => {
+             const newDeviceId = cameraSelect.value;
+             currentDeviceIndex = videoDevices.findIndex(d => d.deviceId === newDeviceId);
+             setupWebcam(newDeviceId);
+        });
+
+        scanButton.addEventListener('click', predict);
+        scanAgainButton.addEventListener('click', resetApp);
+        arChoiceButton.onclick = () => showFormulaSelection('ar');
+        manualChoiceButton.onclick = () => showFormulaSelection('manual');
+
+        let arState = {};
+        let renderer, scene, camera, controller, reticle, hitTestSource = null;
+
+        function startARMeasurement(shapeName, formulaKey) {
+            const formulaData = shapeData[shapeName].formulas[formulaKey];
+            arState = {
+                shapeName, formulaKey, vars: Object.keys(formulaData.vars),
+                varNames: formulaData.vars, values: {}, currentVarIndex: 0,
+                points: [], objects: []
+            };
+            initAR();
+        }
+
+        function initAR() {
+            showState('ar');
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            states.ar.appendChild(renderer.domElement);
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+            scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3));
+            controller = renderer.xr.getController(0);
+            controller.addEventListener('select', onARSelect);
+            scene.add(controller);
+            reticle = new THREE.Mesh(new THREE.RingGeometry(0.05, 0.07, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({color: 0x007aff}));
+            reticle.matrixAutoUpdate = false;
+            reticle.visible = false;
+            scene.add(reticle);
+            
+            const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
+            arButton.id = 'ar-button';
+            document.body.appendChild(arButton);
+            
+            arButton.addEventListener('click', () => {
+                if(arButton.textContent.includes('NOT SUPPORTED')) {
+                    handleArNotSupported();
+                }
+            });
+
+            renderer.setAnimationLoop(renderAR);
+            renderer.xr.addEventListener('sessionstart', () => {
+                arUi.classList.remove('hidden');
+                updateARUI();
+            });
+            arBackButton.onclick = endARSession;
+        }
+        
+        function handleArNotSupported() {
+            endARSession(true);
+            showManualInput(arState.shapeName, arState.formulaKey);
+        }
+
+        function onARSelect() {
+            if (!reticle.visible) return;
+            const point = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+            arState.points.push(point);
+            const pointMesh = new THREE.Mesh(new THREE.SphereGeometry(0.01, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff007a }));
+            pointMesh.position.copy(point);
+            scene.add(pointMesh);
+            arState.objects.push(pointMesh);
+            if (arState.points.length === 2) {
+                const distance = arState.points[0].distanceTo(arState.points[1]);
+                const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(arState.points), new THREE.LineBasicMaterial({ color: 0x00ff7a }));
+                scene.add(line);
+                arState.objects.push(line);
+                const currentVar = arState.vars[arState.currentVarIndex];
+                arState.values[currentVar] = distance;
+                arState.points = [];
+                arState.currentVarIndex++;
+                if (arState.currentVarIndex >= arState.vars.length) {
+                    calculateAndShowARResult();
+                } else {
+                    updateARUI();
+                }
+            } else {
+                updateARUI();
+            }
+        }
+
+        function updateARUI() {
+            if (arState.currentVarIndex >= arState.vars.length) return;
+            const currentVar = arState.vars[arState.currentVarIndex];
+            const varName = arState.varNames[currentVar];
+            const pointState = arState.points.length === 1 ? 'แตะจุดสิ้นสุด' : 'แตะจุดเริ่มต้น';
+            arInstructionText.innerText = `วัด "${varName}" (${pointState})`;
+            let valuesStr = Object.entries(arState.values).map(([k, v]) => `${arState.varNames[k]}: ${(v * 100).toFixed(1)} ซม.`).join(', ');
+            arValuesText.innerText = valuesStr;
+        }
+
+        function calculateAndShowARResult() {
+            const formulaData = shapeData[arState.shapeName].formulas[arState.formulaKey];
+            const arValues = {};
+            Object.entries(arState.values).forEach(([k, v]) => arValues[k] = v * 100);
+            const result = formulaData.calc(arValues);
+            arInstructionText.innerHTML = `ผลลัพธ์: <br> <span class="text-3xl font-bold text-green-400">${result.toFixed(2)} ${formulaData.unit.replace('หน่วย', 'ซม.')}</span>`;
+            arValuesText.innerText = Object.entries(arState.values).map(([k, v]) => `${arState.varNames[k]}: ${(v * 100).toFixed(1)} ซม.`).join(', ');
+        }
+
+        function renderAR(timestamp, frame) {
+            if (frame) {
+                if (!hitTestSource) {
+                    renderer.xr.getSession().requestReferenceSpace('viewer').then(refSpace => {
+                        renderer.xr.getSession().requestHitTestSource({ space: refSpace }).then(source => { hitTestSource = source; });
+                    });
+                }
+                if (hitTestSource) {
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+                    if (hitTestResults.length > 0) {
+                        const hit = hitTestResults[0];
+                        reticle.visible = true;
+                        reticle.matrix.fromArray(hit.getPose(renderer.xr.getReferenceSpace()).transform.matrix);
+                    } else { reticle.visible = false; }
+                }
+            }
+            if(renderer) renderer.render(scene, camera);
+        }
+
+        function endARSession(isFallback = false) {
+            const session = renderer?.xr.getSession();
+            if (session) {
+                session.end().catch(err => console.error("Session end failed:", err));
+            }
+            if (renderer) {
+                renderer.setAnimationLoop(null);
+                if (renderer.domElement) renderer.domElement.remove();
+                renderer = null;
+            }
+            const arButton = document.getElementById('ar-button');
+            if (arButton) arButton.remove();
+            
+            arContainer.classList.add('hidden');
+            arUi.classList.add('hidden');
+            
+            if (!isFallback) {
+                showState('result');
+            }
+        }
+
+        function showManualInput(shapeName, formulaKey) {
+            const formulaData = shapeData[shapeName].formulas[formulaKey];
+            manualInputTitle.innerText = `คำนวณ: ${formulaData.name}`;
+            manualInputFields.innerHTML = '';
+            manualResultDisplay.innerText = '';
+            Object.entries(formulaData.vars).forEach(([key, name]) => {
+                const div = document.createElement('div');
+                div.innerHTML = `<label for="input-${key}" class="block text-left text-gray-300 mb-1">${name}</label>
+                                 <input type="number" id="input-${key}" class="glass-card w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="กรอกค่า ${name} (ซม.)">`;
+                manualInputFields.appendChild(div);
+            });
+            manualCalcButton.onclick = () => {
+                const values = {};
+                let allValid = true;
+                Object.keys(formulaData.vars).forEach(key => {
+                    const input = document.getElementById(`input-${key}`);
+                    const value = parseFloat(input.value);
+                    if (isNaN(value)) {
+                        allValid = false;
+                    }
+                    values[key] = value;
+                });
+                if (allValid) {
+                    const result = formulaData.calc(values);
+                    manualResultDisplay.innerText = `ผลลัพธ์: ${result.toFixed(2)} ${formulaData.unit.replace('หน่วย', 'ซม.')}`;
+                } else {
+                    manualResultDisplay.innerText = 'กรุณากรอกค่าให้ครบถ้วน';
+                }
+            };
+            manualBackButton.onclick = () => showFormulaSelection('manual');
+            showState('manualInput');
+        }
+
+        function main() {
+            startButton.disabled = true;
+            startButton.innerText = 'กำลังโหลดโมเดล...';
+            preloadModel();
+            showState('start');
+        }
+
+        main();
+
+    </script>
+</body>
+</html>
